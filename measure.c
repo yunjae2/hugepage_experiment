@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 
 #define BASEPAGE_SIZE	4096
 #define HUGEPAGE_SIZE	(2 * 1024 * 1024)
@@ -25,8 +26,15 @@ void init_object(size_t size)
 	memset(object, 0, size);
 }
 
-void madvise_object(size_t size, int madvise)
+void madvise_object(size_t size, int huge)
 {
+	if (!huge)
+		return;
+
+	if (madvise(object, size, MADV_HUGEPAGE)) {
+		printf("madvise() failed!\n");
+		exit(1);
+	}
 }
 
 void pollute_tlb(int huge)

@@ -83,7 +83,7 @@ int main(int argc, char **argv)
 		printf("Usage: %s <base|huge> <object size (MiB)>\n", argv[0]);
 		exit(1);
 	}
-	size = atoi(argv[2]) * 1024;
+	size = atoi(argv[2]) * 1024 * 1024;
 
 	init_object(size);
 	madvise_object(size, madvise_huge);

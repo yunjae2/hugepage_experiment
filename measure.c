@@ -18,12 +18,15 @@ int *object;
 
 void init_object(size_t size)
 {
+	int i;
+
 	if (posix_memalign((void **)&object, BASEPAGE_SIZE, size)) {
 		printf("Object allocation failed!\n");
 		exit(1);
 	}
 
-	memset(object, 0, size);
+	for (i = 0; i * sizeof(int) < size; i++)
+		object[i] = i + 1;
 }
 
 void madvise_object(size_t size, int huge)
@@ -57,8 +60,14 @@ void pollute_tlb(int huge)
 
 	free(pollute_data);
 }
+
 void access_object(size_t size)
 {
+	int i;
+	int nr_iters = 0;
+
+	for (i = 0; nr_iters * sizeof(int) < size; i = object[i])
+		nr_iters++;
 }
 
 void free_object(void)

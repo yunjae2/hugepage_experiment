@@ -16,9 +16,10 @@ int *object;
 int perf_fd;
 
 /*
- * We have two type of options;
+ * We have three type of options;
  * 1. Use huge page?
  * 2. Size of object
+ * 3. Access type: sequential? random?
  */
 
 long perf_event_open(struct perf_event_attr *hw_event, pid_t pid,
@@ -31,17 +32,44 @@ long perf_event_open(struct perf_event_attr *hw_event, pid_t pid,
 	return ret;
 }
 
-void init_object(size_t size)
+void init_object(size_t size, int sequential)
 {
-	int i;
+	int i, nr_conn;
+	int *connected;
+	int from, to;
+
+	int nr_entries = size / sizeof(int);
 
 	if (posix_memalign((void **)&object, BASEPAGE_SIZE, size)) {
 		printf("Object allocation failed!\n");
 		exit(1);
 	}
 
-	for (i = 0; i * sizeof(int) < size; i++)
-		object[i] = i + 1;
+	if (sequential) {
+		for (i = 0; i < nr_entries; i++)
+			object[i] = i + 1;
+	} else {
+		srand(42);
+		connected = malloc(size);
+		memset(connected, 0, size);
+
+		from = 0;
+		connected[from] = 1;
+		for (nr_conn = 0; nr_conn < nr_entries; nr_conn++) {
+			if (nr_conn == nr_entries - 1) {
+				to = 0;
+				goto connect;
+			}
+			to = rand() % nr_entries;
+			while (connected[to]) {
+				to = (to + 1) % nr_entries;
+			}
+connect:
+			object[from] = to;
+			connected[to] = 1;
+			from = to;
+		}
+	}
 }
 
 void madvise_object(size_t size, int huge)
@@ -131,10 +159,12 @@ void free_object(void)
 int main(int argc, char **argv)
 {
 	int madvise_huge;
+	int sequential;
 	size_t size;
 
-	if (argc != 3) {
-		printf("Usage: %s <base|huge> <object size (MiB)>\n", argv[0]);
+	if (argc != 4) {
+		printf("Usage: %s <base|huge> <seq|rand> <object size (MiB)>\n",
+				argv[0]);
 		exit(1);
 	}
 	if (!strcmp(argv[1], "base"))
@@ -142,12 +172,23 @@ int main(int argc, char **argv)
 	else if (!strcmp(argv[1], "huge"))
 		madvise_huge = 1;
 	else {
-		printf("Usage: %s <base|huge> <object size (MiB)>\n", argv[0]);
+		printf("Usage: %s <base|huge> <seq|rand> <object size (MiB)>\n",
+				argv[0]);
 		exit(1);
 	}
-	size = atoi(argv[2]) * 1024 * 1024;
+	if (!strcmp(argv[2], "seq"))
+		sequential = 1;
+	else if (!strcmp(argv[2], "rand"))
+		sequential = 0;
+	else {
+		printf("Usage: %s <base|huge> <seq|rand> <object size (MiB)>\n",
+				argv[0]);
+		exit(1);
+	}
 
-	init_object(size);
+	size = atoi(argv[3]) * 1024 * 1024;
+
+	init_object(size, sequential);
 	madvise_object(size, madvise_huge);
 	pollute_tlb(madvise_huge);
 	perf_record();

@@ -6,6 +6,7 @@
 #include <linux/perf_event.h>
 #include <unistd.h>
 #include <asm/unistd.h>
+#include <time.h>
 
 #define BASEPAGE_SIZE	4096
 #define HUGEPAGE_SIZE	(2 * 1024 * 1024)
@@ -21,6 +22,22 @@ int perf_fd;
  * 2. Size of object
  * 3. Access type: sequential? random?
  */
+
+void print_interval(struct timespec *start, struct timespec *end)
+{
+	time_t diff_sec;
+	long diff_nsec;
+
+	diff_sec = end->tv_sec - start->tv_sec;
+	diff_nsec = end->tv_nsec - start->tv_nsec;
+
+	if (diff_nsec < 0) {
+		diff_nsec += 1000 * 1000 * 1000;
+		diff_sec -= 1;
+	}
+
+	printf("%ld.%06lds\n", diff_sec, diff_nsec / 1000);
+}
 
 long perf_event_open(struct perf_event_attr *hw_event, pid_t pid,
 		int cpu, int group_fd, unsigned long flags)
@@ -38,8 +55,11 @@ void init_object(size_t size, int sequential, int huge)
 	int from, to;
 	int *rand_seq;
 	int temp;
+	struct timespec start, end;
 
 	int nr_entries = size / sizeof(int);
+
+	clock_gettime(CLOCK_REALTIME, &start);
 
 	if (posix_memalign((void **)&object, BASEPAGE_SIZE, size)) {
 		printf("Object allocation failed!\n");
@@ -52,6 +72,9 @@ void init_object(size_t size, int sequential, int huge)
 			exit(1);
 		}
 	}
+
+	memset(object, 0, size);
+	clock_gettime(CLOCK_REALTIME, &end);
 
 	if (sequential) {
 		for (i = 0; i < nr_entries; i++)
@@ -81,6 +104,9 @@ void init_object(size_t size, int sequential, int huge)
 
 		free(rand_seq);
 	}
+
+	printf("alloc time: ");
+	print_interval(&start, &end);
 }
 
 void pollute_tlb(int huge)
@@ -146,9 +172,16 @@ void access_object(size_t size)
 {
 	int i;
 	int nr_iters = 0;
+	struct timespec start, end;
+
+	clock_gettime(CLOCK_REALTIME, &start);
 
 	for (i = 0; nr_iters * sizeof(int) < size; i = object[i])
 		nr_iters++;
+
+	clock_gettime(CLOCK_REALTIME, &end);
+	printf("access time: ");
+	print_interval(&start, &end);
 }
 
 void free_object(void)

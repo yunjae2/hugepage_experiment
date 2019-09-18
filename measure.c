@@ -47,7 +47,7 @@ void init_object(size_t size, int sequential)
 
 	if (sequential) {
 		for (i = 0; i < nr_entries; i++)
-			object[i] = i + 1;
+			object[i] = (i + 1) % nr_entries;
 	} else {
 		srand(42);
 		connected = malloc(size);

@@ -32,7 +32,7 @@ long perf_event_open(struct perf_event_attr *hw_event, pid_t pid,
 	return ret;
 }
 
-void init_object(size_t size, int sequential)
+void init_object(size_t size, int sequential, int huge)
 {
 	int i, swap_with;
 	int from, to;
@@ -44,6 +44,13 @@ void init_object(size_t size, int sequential)
 	if (posix_memalign((void **)&object, BASEPAGE_SIZE, size)) {
 		printf("Object allocation failed!\n");
 		exit(1);
+	}
+
+	if (huge) {
+		if (madvise(object, size, MADV_HUGEPAGE)) {
+			printf("madvise() failed!\n");
+			exit(1);
+		}
 	}
 
 	if (sequential) {
@@ -73,17 +80,6 @@ void init_object(size_t size, int sequential)
 		}
 
 		free(rand_seq);
-	}
-}
-
-void madvise_object(size_t size, int huge)
-{
-	if (!huge)
-		return;
-
-	if (madvise(object, size, MADV_HUGEPAGE)) {
-		printf("madvise() failed!\n");
-		exit(1);
 	}
 }
 
@@ -192,8 +188,7 @@ int main(int argc, char **argv)
 
 	size = atoi(argv[3]) * 1024 * 1024;
 
-	init_object(size, sequential);
-	madvise_object(size, madvise_huge);
+	init_object(size, sequential, madvise_huge);
 	pollute_tlb(madvise_huge);
 	perf_record();
 	access_object(size);

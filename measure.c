@@ -34,9 +34,10 @@ long perf_event_open(struct perf_event_attr *hw_event, pid_t pid,
 
 void init_object(size_t size, int sequential)
 {
-	int i, nr_conn;
-	int *connected;
+	int i, swap_with;
 	int from, to;
+	int *rand_seq;
+	int temp;
 
 	int nr_entries = size / sizeof(int);
 
@@ -50,25 +51,28 @@ void init_object(size_t size, int sequential)
 			object[i] = (i + 1) % nr_entries;
 	} else {
 		srand(42);
-		connected = malloc(size);
-		memset(connected, 0, size);
+		rand_seq = malloc(size);
+		for (i = 0; i < nr_entries; i++) {
+			rand_seq[i] = i;
+		}
 
-		from = 0;
-		connected[from] = 1;
-		for (nr_conn = 0; nr_conn < nr_entries; nr_conn++) {
-			if (nr_conn == nr_entries - 1) {
-				to = 0;
-				goto connect;
-			}
-			to = rand() % nr_entries;
-			while (connected[to]) {
-				to = (to + 1) % nr_entries;
-			}
-connect:
+		for (i = 0; i < nr_entries; i++) {
+			swap_with = rand() % nr_entries;
+			if (i == swap_with)
+				continue;
+			temp = rand_seq[i];
+			rand_seq[i] = rand_seq[swap_with];
+			rand_seq[swap_with] = temp;
+		}
+
+		from = rand_seq[nr_entries - 1];
+		for (i = 0; i < nr_entries; i++) {
+			to = rand_seq[i];
 			object[from] = to;
-			connected[to] = 1;
 			from = to;
 		}
+
+		free(rand_seq);
 	}
 }
 

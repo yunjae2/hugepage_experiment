@@ -196,7 +196,7 @@ int main(int argc, char **argv)
 	size_t size;
 
 	if (argc != 4) {
-		printf("Usage: %s <base|huge> <seq|rand> <object size (MiB)>\n",
+		printf("Usage: %s <base|huge> <seq|rand> <object size (KiB)>\n",
 				argv[0]);
 		exit(1);
 	}
@@ -205,7 +205,7 @@ int main(int argc, char **argv)
 	else if (!strcmp(argv[1], "huge"))
 		madvise_huge = 1;
 	else {
-		printf("Usage: %s <base|huge> <seq|rand> <object size (MiB)>\n",
+		printf("Usage: %s <base|huge> <seq|rand> <object size (KiB)>\n",
 				argv[0]);
 		exit(1);
 	}
@@ -214,12 +214,12 @@ int main(int argc, char **argv)
 	else if (!strcmp(argv[2], "rand"))
 		sequential = 0;
 	else {
-		printf("Usage: %s <base|huge> <seq|rand> <object size (MiB)>\n",
+		printf("Usage: %s <base|huge> <seq|rand> <object size (KiB)>\n",
 				argv[0]);
 		exit(1);
 	}
 
-	size = atoi(argv[3]) * 1024 * 1024;
+	size = atoi(argv[3]) * 1024;
 
 	init_object(size, sequential, madvise_huge);
 	pollute_tlb(madvise_huge);

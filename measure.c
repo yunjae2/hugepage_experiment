@@ -19,6 +19,7 @@
 #define EVENT_DTLB_MISSES		0x49
 #define EVENT_ITLB_MISSES		0x85
 #define EVENT_ITLB_FLUSH		0xAE
+#define EVENT_UNHALTED_CYCLES		0x3C
 
 #define UMASK_ANY			0x01
 #define UMASK_WALK_COMPLETED		0x02
@@ -26,10 +27,13 @@
 #define UMASK_STLB_HIT			0x10
 #define UMASK_PDE_MISS			0x20
 #define UMASK_LARGE_WALK_COMPLETED	0x80
+#define UMASK_CORE_CYCLES		0x00
+#define UMASK_REFERENCE_CYCLES		0x01
+
+#define PERF_CONFIG(U, E)		((U << 8) | E)
 
 
 int *object;
-int perf_fd;
 
 /*
  * We have three type of options;
@@ -145,37 +149,47 @@ void pollute_tlb(int huge)
 	free(pollute_data);
 }
 
-void perf_record(void)
+int perf_init(__u64 config)
 {
 	struct perf_event_attr pe;
+	int fd;
 
 	memset(&pe, 0, sizeof(struct perf_event_attr));
 	pe.type = PERF_TYPE_RAW;
 	pe.size = sizeof(struct perf_event_attr);
 	pe.disabled = 1;
 	pe.exclude_hv = 1;
-	pe.config = (UMASK_ANY << 8) | EVENT_DTLB_MISSES;
+	pe.config = config;
 
-	perf_fd = perf_event_open(&pe, 0, 0, -1, 0);
-	if (perf_fd == -1) {
+	fd = perf_event_open(&pe, 0, 0, -1, 0);
+	if (fd == -1) {
 		fprintf(stderr, "Error opening leader %llx\n", pe.config);
 		exit(EXIT_FAILURE);
 	}
 
-	ioctl(perf_fd, PERF_EVENT_IOC_RESET, 0);
-	ioctl(perf_fd, PERF_EVENT_IOC_ENABLE, 0);
+	ioctl(fd, PERF_EVENT_IOC_RESET, 0);
+
+	return fd;
 }
 
-void perf_report(void)
+void perf_record_start(int fd)
+{
+	ioctl(fd, PERF_EVENT_IOC_ENABLE, 0);
+}
+
+void perf_record_end(int fd)
+{
+	ioctl(fd, PERF_EVENT_IOC_DISABLE, 0);
+}
+
+void perf_report(int fd, char *str)
 {
 	long long count;
 
-	ioctl(perf_fd, PERF_EVENT_IOC_DISABLE, 0);
-	read(perf_fd, &count, sizeof(long long));
+	read(fd, &count, sizeof(long long));
+	printf("%s: %lld\n", str, count);
 
-	printf("dtlb misses: %lld\n", count);
-
-	close(perf_fd);
+	close(fd);
 }
 
 void access_object(size_t size)
@@ -204,7 +218,9 @@ int main(int argc, char **argv)
 	int madvise_huge;
 	int sequential;
 	size_t size;
+	int nr_dtlb_misses, dtlb_miss_walk_cycles, cpu_cycles;
 	cpu_set_t cpu_mask;
+
 	CPU_ZERO(&cpu_mask);
 	CPU_SET(0, &cpu_mask);
 	if (sched_setaffinity(0, sizeof(cpu_mask), &cpu_mask)) {
@@ -240,9 +256,21 @@ int main(int argc, char **argv)
 
 	init_object(size, sequential, madvise_huge);
 	pollute_tlb(madvise_huge);
-	perf_record();
+	nr_dtlb_misses = perf_init(PERF_CONFIG(UMASK_ANY, EVENT_DTLB_MISSES));
+	dtlb_miss_walk_cycles = perf_init(PERF_CONFIG(UMASK_WALK_CYCLES,
+				EVENT_DTLB_MISSES));
+	cpu_cycles = perf_init(PERF_CONFIG(UMASK_CORE_CYCLES,
+				EVENT_UNHALTED_CYCLES));
+	perf_record_start(nr_dtlb_misses);
+	perf_record_start(dtlb_miss_walk_cycles);
+	perf_record_start(cpu_cycles);
 	access_object(size);
-	perf_report();
+	perf_record_end(nr_dtlb_misses);
+	perf_record_end(dtlb_miss_walk_cycles);
+	perf_record_end(cpu_cycles);
+	perf_report(nr_dtlb_misses, "nr_dtlb_misses");
+	perf_report(dtlb_miss_walk_cycles, "dtlb_miss_walk_cycles");
+	perf_report(cpu_cycles, "cpu_cycles");
 	free_object();
 
 	return 0;

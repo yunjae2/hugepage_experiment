@@ -13,6 +13,19 @@
 #define TLB_SIZE	(512 * 4 * 1024)	// 512 entries with 4K
 #define HUGETLB_SIZE	(32 * 2 * 1024 * 1024)	// 32 entries with 2M
 
+#define EVENT_DTLB_LOAD_MISSES		0x08
+#define EVENT_DTLB_MISSES		0x49
+#define EVENT_ITLB_MISSES		0x85
+#define EVENT_ITLB_FLUSH		0xAE
+
+#define UMASK_ANY			0x01
+#define UMASK_WALK_COMPLETED		0x02
+#define UMASK_WALK_CYCLES		0x04
+#define UMASK_STLB_HIT			0x10
+#define UMASK_PDE_MISS			0x20
+#define UMASK_LARGE_WALK_COMPLETED	0x80
+
+
 int *object;
 int perf_fd;
 
@@ -134,17 +147,12 @@ void perf_record(void)
 {
 	struct perf_event_attr pe;
 
-	__u64 perf_hw_cache_id = PERF_COUNT_HW_CACHE_DTLB;
-	__u64 perf_hw_cache_op_id = PERF_COUNT_HW_CACHE_OP_READ;
-	__u64 perf_hw_cache_op_result_id = PERF_COUNT_HW_CACHE_RESULT_MISS;
-
 	memset(&pe, 0, sizeof(struct perf_event_attr));
-	pe.type = PERF_TYPE_HW_CACHE;
+	pe.type = PERF_TYPE_RAW;
 	pe.size = sizeof(struct perf_event_attr);
 	pe.disabled = 1;
 	pe.exclude_hv = 1;
-	pe.config = (perf_hw_cache_id) | (perf_hw_cache_op_id << 8) |
-		(perf_hw_cache_op_result_id << 16);
+	pe.config = (UMASK_ANY << 8) | EVENT_DTLB_MISSES;
 
 	perf_fd = perf_event_open(&pe, 0, 0, -1, 0);
 	if (perf_fd == -1) {

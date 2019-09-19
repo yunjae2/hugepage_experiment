@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,6 +8,7 @@
 #include <unistd.h>
 #include <asm/unistd.h>
 #include <time.h>
+#include <sched.h>
 
 #define BASEPAGE_SIZE	4096
 #define HUGEPAGE_SIZE	(2 * 1024 * 1024)
@@ -202,6 +204,13 @@ int main(int argc, char **argv)
 	int madvise_huge;
 	int sequential;
 	size_t size;
+	cpu_set_t cpu_mask;
+	CPU_ZERO(&cpu_mask);
+	CPU_SET(0, &cpu_mask);
+	if (sched_setaffinity(0, sizeof(cpu_mask), &cpu_mask)) {
+		printf("Affinity set failed\n");
+		exit(1);
+	}
 
 	if (argc != 4) {
 		printf("Usage: %s <base|huge> <seq|rand> <object size (KiB)>\n",
